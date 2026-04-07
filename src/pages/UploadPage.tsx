@@ -1,7 +1,7 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { TopBar } from '../components/TopBar';
 import { cn } from '../lib/utils';
-import { Upload, X, Send, Loader2, Calendar, Clock, CheckCircle2 } from 'lucide-react';
+import { Upload, X, Send, Loader2, Clock, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import axios from 'axios';
 
@@ -17,12 +17,17 @@ export const UploadPage = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [caption, setCaption] = useState('');
   const [isUploading, setIsUploading] = useState(false);
-  
-  // --- STATE JADWAL GACOR ---
-  const [selectedTime, setSelectedTime] = useState('20:00'); // Default Prime Time
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [selectedTime, setSelectedTime] = useState('20:00');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Daftar Jam Gacor (Slot)
+  // Cleanup memori browser saat pindah halaman
+  useEffect(() => {
+    return () => {
+      files.forEach(file => URL.revokeObjectURL(file.preview));
+    };
+  }, [files]);
+
   const timeSlots = [
     { label: 'Pagi (Fresh)', time: '09:00', desc: 'Waktunya orang baru masuk kantor' },
     { label: 'Siang (Lunch)', time: '12:30', desc: 'Jam istirahat makan siang' },
@@ -30,54 +35,89 @@ export const UploadPage = () => {
     { label: 'Malam (Prime)', time: '20:00', desc: 'Engagement paling tinggi' },
   ];
 
-  // --- FUNGSI UPLOAD KE DATABASE ---
+  // 1. FUNGSI GENERATE CAPTION (Minta bantuan AI n8n)
+  const generateAICaption = async () => {
+    if (files.length === 0) return alert("Upload foto dulu biar AI bisa lihat kontennya!");
+
+    setIsGenerating(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', files[0].file);
+
+      // Menggunakan URL Webhook Production agar n8n jalan terus
+      const n8nWebhookUrl = 'https://n8n-n8n.wrmm9a.easypanel.host/webhook/2b2a8b50-a3f3-4234-9ce0-caef8903f973';
+      
+      const response = await axios.post(n8nWebhookUrl, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      console.log("Respon n8n:", response.data);
+
+      let resultText = "";
+      // Mengecek apakah respon n8n berbentuk array atau object
+      if (Array.isArray(response.data) && response.data.length > 0) {
+        const firstItem = response.data[0];
+        resultText = firstItem.caption || firstItem.text || firstItem.output || "";
+      } else if (response.data) {
+        resultText = response.data.caption || response.data.text || response.data.output || "";
+      }
+
+      if (resultText) {
+        setCaption(resultText);
+      } else {
+        alert("n8n merespon, tapi teks caption tidak ditemukan.");
+      }
+    } catch (error) {
+      console.error("Gagal generate caption:", error);
+      alert("Gagal menghubungi n8n. Pastikan workflow sudah ACTIVE.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // 2. FUNGSI SIMPAN KE DATABASE (Backend Lokal)
   const handleUpload = async () => {
     if (files.length === 0) return alert("Pilih minimal satu foto atau video!");
-    if (!caption.trim()) return alert("Tulis caption-mu dulu biar kontennya menarik!");
+    if (!caption.trim()) return alert("Tulis caption-mu dulu!");
 
     setIsUploading(true);
     try {
-      // Gabungkan tanggal hari ini dengan jam gacor yang dipilih
-      const today = new Date();
+      const scheduledDate = new Date();
       const [hours, minutes] = selectedTime.split(':');
-      today.setHours(parseInt(hours), parseInt(minutes), 0);
+      scheduledDate.setHours(parseInt(hours), parseInt(minutes), 0);
 
-      const payload = {
-        user_id: 1,
-        instagram_account_id: 1,
-        media_url: files[0].preview,
-        caption: caption,
-        status: 'scheduled',
-        scheduled_at: today.toISOString(), // Jam gacor dinamis
-      };
+      // --- PERBAIKAN UTAMA: MENGIRIM FILE ASLI KE BACKEND ---
+      const formData = new FormData();
+      formData.append('image', files[0].file); // Backend harus baca field 'image'
+      formData.append('user_id', '1');
+      formData.append('instagram_account_id', '1');
+      formData.append('caption', caption);
+      formData.append('status', 'scheduled');
+      formData.append('scheduled_at', scheduledDate.toISOString());
 
-      const response = await axios.post('http://localhost:5000/api/posts', payload);
+      await axios.post('http://localhost:5000/api/posts', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
       
-      if (response.status === 201) {
-        alert(`✅ Mantap! Postingan dijadwalkan jam ${selectedTime}`);
-        
-        // Bersihkan form
-        setFiles([]);
-        setCaption('');
-        if (fileInputRef.current) fileInputRef.current.value = '';
-      }
+      alert(`✅ Berhasil! Postingan dijadwalkan jam ${selectedTime}`);
+      
+      // Reset form setelah berhasil
+      files.forEach(f => URL.revokeObjectURL(f.preview));
+      setFiles([]);
+      setCaption('');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      
     } catch (error: any) {
       console.error("Upload error:", error);
-      alert("Gagal ngirim ke server. Cek koneksi!");
+      alert("Gagal menyimpan. Pastikan backend sudah support upload file (Multer).");
     } finally {
       setIsUploading(false);
     }
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      addFiles(Array.from(e.target.files));
-    }
-  };
-
   const addFiles = (newFiles: File[]) => {
     const mappedFiles: UploadedFile[] = newFiles.map(file => ({
-      id: Math.random().toString(36).substring(7),
+      id: crypto.randomUUID(),
       file,
       preview: URL.createObjectURL(file),
       type: file.type.startsWith('video') ? 'video' : 'image'
@@ -87,28 +127,10 @@ export const UploadPage = () => {
 
   const removeFile = (id: string) => {
     setFiles(prev => {
-      const filtered = prev.filter(f => f.id !== id);
       const removed = prev.find(f => f.id === id);
       if (removed) URL.revokeObjectURL(removed.preview);
-      return filtered;
+      return prev.filter(f => f.id !== id);
     });
-  };
-
-  const onDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const onDragLeave = () => {
-    setIsDragging(false);
-  };
-
-  const onDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    if (e.dataTransfer.files) {
-      addFiles(Array.from(e.dataTransfer.files));
-    }
   };
 
   return (
@@ -117,112 +139,106 @@ export const UploadPage = () => {
       animate={{ opacity: 1, y: 0 }}
       className="flex-1 h-screen overflow-y-auto no-scrollbar pb-24 lg:pb-8"
     >
-      <TopBar 
-        title="Upload Bahan Konten" 
-        subtitle="Siapkan materi terbaikmu untuk postingan selanjutnya." 
-      />
+      <TopBar title="Upload Bahan Konten" subtitle="Siapkan materi terbaikmu." />
 
       <div className="px-6 pt-4 lg:pt-8 max-w-5xl mx-auto space-y-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* Kolom Kiri: Upload Area */}
+          
+          {/* Kolom Kiri: Dropzone */}
           <div className="lg:col-span-7 space-y-6">
             <div 
-              onDragOver={onDragOver}
-              onDragLeave={onDragLeave}
-              onDrop={onDrop}
+              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDragging(false);
+                if (e.dataTransfer.files) addFiles(Array.from(e.dataTransfer.files));
+              }}
               onClick={() => fileInputRef.current?.click()}
               className={cn(
                 "relative border-2 border-dashed rounded-3xl p-12 flex flex-col items-center justify-center transition-all cursor-pointer min-h-[300px]",
-                isDragging 
-                  ? "border-primary bg-primary/5 scale-[0.98]" 
-                  : "border-outline-variant/30 bg-surface-container-low hover:bg-surface-container-high"
+                isDragging ? "border-primary bg-primary/5" : "border-outline-variant/30 bg-surface-container-low"
               )}
             >
-              <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" multiple accept="image/*,video/*" />
+              <input type="file" ref={fileInputRef} onChange={(e) => e.target.files && addFiles(Array.from(e.target.files))} className="hidden" multiple accept="image/*,video/*" />
               <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center text-primary mb-4">
                 <Upload size={32} />
               </div>
-              <h3 className="text-xl font-bold font-headline mb-2">Tarik & Lepas Konten</h3>
-              <p className="text-on-surface-variant text-sm text-center">Maks. 50MB per file</p>
+              <h3 className="text-xl font-bold">Tarik & Lepas Konten</h3>
+              <p className="text-sm text-gray-500">Maks. 50MB per file</p>
             </div>
 
-            {/* Preview Grid */}
-            <AnimatePresence>
-              {files.length > 0 && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                  {files.map((file) => (
-                    <div key={file.id} className="relative aspect-square rounded-2xl overflow-hidden shadow-sm group">
-                      {file.type === 'video' ? <video src={file.preview} className="w-full h-full object-cover" /> : <img src={file.preview} className="w-full h-full object-cover" alt="Preview" />}
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                        <button onClick={(e) => { e.stopPropagation(); removeFile(file.id); }} className="p-2 bg-white/20 backdrop-blur-md rounded-full text-white hover:bg-red-500">
-                          <X size={20} />
-                        </button>
-                      </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              <AnimatePresence>
+                {files.map((file) => (
+                  <motion.div key={file.id} layout initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }} className="relative aspect-square rounded-2xl overflow-hidden group shadow-md">
+                    {file.type === 'video' ? <video src={file.preview} className="w-full h-full object-cover" /> : <img src={file.preview} className="w-full h-full object-cover" />}
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                      <button onClick={(e) => { e.stopPropagation(); removeFile(file.id); }} className="p-2 bg-red-500 rounded-full text-white">
+                        <X size={20} />
+                      </button>
                     </div>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
           </div>
 
-          {/* Kolom Kanan: Detail & Jam Gacor */}
+          {/* Kolom Kanan: Detail & Schedule */}
           <div className="lg:col-span-5 space-y-6">
-            <div className="bg-surface-container-lowest rounded-3xl p-6 shadow-sm border border-outline-variant/10 space-y-6">
-              {/* Bagian Caption */}
+            <div className="bg-white rounded-3xl p-6 shadow-sm border space-y-6">
               <div>
-                <label className="block text-sm font-bold mb-2 text-on-surface">Caption Postingan</label>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="text-sm font-bold">Caption Postingan</label>
+                  <button 
+                    onClick={generateAICaption}
+                    disabled={isGenerating || files.length === 0}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold bg-amber-500 text-white hover:bg-amber-600 disabled:bg-gray-200"
+                  >
+                    {isGenerating ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                    {isGenerating ? "AI Berpikir..." : "Buatkan Caption (AI)"}
+                  </button>
+                </div>
                 <textarea 
                   value={caption}
                   onChange={(e) => setCaption(e.target.value)}
-                  placeholder="Tulis caption menarik di sini..."
-                  className="w-full h-24 bg-surface-container-low rounded-2xl p-4 text-sm border-none focus:ring-2 focus:ring-primary/20 outline-none resize-none"
+                  placeholder="Tulis caption..."
+                  className="w-full h-24 bg-gray-50 rounded-2xl p-4 text-sm outline-none border focus:border-primary/50"
                 />
               </div>
 
-              {/* BAGIAN JADWAL GACOR */}
               <div>
-                <label className="flex items-center gap-2 text-sm font-bold mb-4 text-on-surface">
+                <label className="flex items-center gap-2 text-sm font-bold mb-4">
                   <Clock size={18} className="text-primary" />
-                  Waktu Posting Tergacor
+                  Waktu Posting
                 </label>
-                <div className="grid grid-cols-1 gap-3">
+                <div className="space-y-3">
                   {timeSlots.map((slot) => (
                     <div 
                       key={slot.time}
                       onClick={() => setSelectedTime(slot.time)}
                       className={cn(
                         "p-4 rounded-2xl border-2 transition-all cursor-pointer flex justify-between items-center",
-                        selectedTime === slot.time 
-                          ? "border-primary bg-primary/5 shadow-sm" 
-                          : "border-outline-variant/20 hover:border-primary/20"
+                        selectedTime === slot.time ? "border-primary bg-primary/5" : "border-gray-100 hover:border-primary/20"
                       )}
                     >
                       <div>
-                        <div className="text-xs font-bold uppercase text-primary/70">{slot.label}</div>
-                        <div className="text-[10px] text-on-surface-variant leading-tight">{slot.desc}</div>
+                        <div className="text-xs font-bold text-primary">{slot.label}</div>
+                        <div className="text-[10px] text-gray-500">{slot.desc}</div>
                       </div>
-                      <div className="text-right">
-                        <div className={cn("text-lg font-black tracking-tight", selectedTime === slot.time ? "text-primary" : "text-on-surface-variant")}>
-                          {slot.time}
-                        </div>
-                        {selectedTime === slot.time && <CheckCircle2 size={16} className="text-primary ml-auto" />}
-                      </div>
+                      <div className="text-lg font-black">{slot.time}</div>
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* Action Button */}
               <button 
                 onClick={handleUpload}
                 disabled={isUploading}
-                className={cn(
-                  "w-full py-4 bg-primary text-white rounded-full font-bold shadow-lg flex items-center justify-center gap-2 transition-all",
-                  isUploading ? "opacity-70 cursor-not-allowed" : "hover:brightness-110 active:scale-95 shadow-primary/20"
-                )}
+                className="w-full py-4 bg-primary text-white rounded-full font-bold shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {isUploading ? <Loader2 className="animate-spin" size={20} /> : <Send size={20} />}
-                {isUploading ? 'Sedang Memproses...' : 'Siapkan Postingan'}
+                {isUploading ? 'Menyimpan...' : 'Jadwalkan Postingan'}
               </button>
             </div>
           </div>
