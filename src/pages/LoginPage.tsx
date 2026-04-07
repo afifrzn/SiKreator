@@ -4,12 +4,17 @@ import axios from 'axios';
 import { motion } from 'framer-motion';
 import { Mail, Lock, ArrowRight, Sparkles, Loader2 } from 'lucide-react';
 
+// ✅ cukup sekali di sini
+axios.defaults.withCredentials = true;
+
 export const LoginPage = () => {
   const navigate = useNavigate();
+
   const [formData, setFormData] = useState({
     email: '',
     password: ''
   });
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -19,28 +24,34 @@ export const LoginPage = () => {
     setError('');
 
     try {
-      const response = await axios.post('http://localhost:5000/api/login', formData);
+      const response = await axios.post(
+        'http://localhost:5000/api/login',
+        formData
+      );
 
-      if (response.data && response.data.id) {
-        saveSession(response.data.name, response.data.id);
+      console.log('LOGIN RESPONSE:', response.data); // 🔍 debug
+
+      if (response.data?.success) {
+        const user = response.data.user;
+
+        // optional (buat UI doang)
+        localStorage.setItem('user_name', user.name);
+        localStorage.setItem('user_id', user.id.toString());
+        localStorage.setItem('is_logged_in', 'true');
+
+        navigate('/'); // ✅ cukup ini
       } else {
         setError('Respons server tidak valid.');
       }
+
     } catch (err: any) {
-      const errorMessage = err.response?.data?.error || 'Terjadi kesalahan koneksi server.';
+      const errorMessage =
+        err.response?.data?.error || 'Terjadi kesalahan koneksi server.';
       setError(errorMessage);
       console.error('Login Error:', err);
     } finally {
       setLoading(false);
     }
-  };
-
-  const saveSession = (name: string, id: string | number) => {
-    localStorage.setItem('user_name', name);
-    localStorage.setItem('user_id', id.toString());
-    localStorage.setItem('is_logged_in', 'true');
-    navigate('/');
-    window.location.reload();
   };
 
   return (
@@ -50,7 +61,6 @@ export const LoginPage = () => {
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl shadow-primary/10 border border-gray-100 overflow-hidden"
       >
-        {/* Header Section */}
         <div className="bg-primary p-10 text-white text-center relative overflow-hidden">
           <motion.div
             animate={{ rotate: [0, 15, -15, 0], scale: [1, 1.1, 1] }}
@@ -60,86 +70,61 @@ export const LoginPage = () => {
             <Sparkles size={80} />
           </motion.div>
 
-          <h2 className="text-3xl font-black tracking-tight relative z-10">
-            Selamat Datang
-          </h2>
-          <p className="text-white/80 text-sm mt-2 font-medium relative z-10">
+          <h2 className="text-3xl font-black">Selamat Datang</h2>
+          <p className="text-white/80 text-sm mt-2">
             Masuk ke Dashboard Kreator Anda.
           </p>
         </div>
 
-        {/* Form Section */}
         <form onSubmit={handleSubmit} className="p-8 space-y-5">
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-gray-500 uppercase ml-1">
-              Email / Username
-            </label>
-            <div className="relative flex items-center group">
-              <Mail
-                className="absolute left-4 text-gray-400 group-focus-within:text-primary transition-colors"
-                size={18}
-              />
-              <input
-                required
-                type="text"
-                placeholder="nama@email.com"
-                className="w-full bg-gray-50 border border-gray-200 rounded-2xl py-3.5 pl-12 pr-4 outline-none focus:border-primary focus:bg-white transition-all text-sm"
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              />
-            </div>
+          
+          <div>
+            <label className="text-xs font-bold text-gray-500">Email</label>
+            <input
+              required
+              type="text"
+              placeholder="nama@email.com"
+              className="w-full mt-1 px-4 py-3 rounded-xl bg-gray-50 border focus:border-primary outline-none"
+              onChange={(e) =>
+                setFormData({ ...formData, email: e.target.value })
+              }
+            />
           </div>
 
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-gray-500 uppercase ml-1">Password</label>
-            <div className="relative flex items-center group">
-              <Lock
-                className="absolute left-4 text-gray-400 group-focus-within:text-primary transition-colors"
-                size={18}
-              />
-              <input
-                required
-                type="password"
-                placeholder="••••••••"
-                className="w-full bg-gray-50 border border-gray-200 rounded-2xl py-3.5 pl-12 pr-4 outline-none focus:border-primary focus:bg-white transition-all text-sm"
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              />
-            </div>
+          <div>
+            <label className="text-xs font-bold text-gray-500">Password</label>
+            <input
+              required
+              type="password"
+              placeholder="••••••••"
+              className="w-full mt-1 px-4 py-3 rounded-xl bg-gray-50 border focus:border-primary outline-none"
+              onChange={(e) =>
+                setFormData({ ...formData, password: e.target.value })
+              }
+            />
           </div>
 
           {error && (
-            <motion.p
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="text-red-500 text-xs font-bold text-center bg-red-50 p-2 rounded-lg"
-            >
+            <p className="text-red-500 text-xs text-center bg-red-50 p-2 rounded">
               {error}
-            </motion.p>
+            </p>
           )}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-primary text-white py-4 rounded-2xl font-black flex items-center justify-center gap-2 hover:brightness-110 transition-all shadow-lg shadow-primary/20 active:scale-[0.98] disabled:opacity-50 mt-4"
+            className="w-full bg-primary text-white py-4 rounded-xl font-bold flex justify-center items-center gap-2"
           >
-            {loading ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : (
-              <>
-                Masuk Sekarang
-                <ArrowRight size={18} />
-              </>
-            )}
+            {loading ? <Loader2 className="animate-spin" /> : 'Login'}
           </button>
 
-          <p className="text-center text-xs text-gray-500 font-medium pt-4">
+          <p className="text-center text-xs">
             Belum punya akun?{' '}
-            <Link
-              to="/register"
-              className="text-primary font-bold ml-1 hover:underline transition-all"
-            >
-              Daftar di sini
+            <Link to="/register" className="text-primary font-bold">
+              Daftar
             </Link>
           </p>
+
         </form>
       </motion.div>
     </div>
