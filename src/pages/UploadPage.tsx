@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { TopBar } from '../components/TopBar';
 import { cn } from '../lib/utils';
-import { Upload, X, Send, Loader2, Clock, Sparkles, Calendar as CalendarIcon } from 'lucide-react';
+import { Upload, X, Send, Loader2, Clock, Sparkles, Calendar as CalendarIcon, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { Link } from 'react-router-dom';
 import axios from 'axios';
 
 interface UploadedFile {
@@ -12,17 +13,41 @@ interface UploadedFile {
   type: 'image' | 'video';
 }
 
+interface Account {
+  id: number;
+  username: string;
+}
+
 export const UploadPage = () => {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [caption, setCaption] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-  
+
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState<string>('');
+  const [loadingAccounts, setLoadingAccounts] = useState(true);
+
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedTime, setSelectedTime] = useState('20:00');
-  
+
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch akun IG milik user yang sedang login
+  useEffect(() => {
+    const userId = localStorage.getItem('user_id');
+    if (!userId) return;
+
+    axios.get(`http://localhost:5000/api/accounts?user_id=${userId}`)
+      .then(res => {
+        setAccounts(res.data);
+        // Auto-select akun pertama jika ada
+        if (res.data.length > 0) setSelectedAccountId(res.data[0].id.toString());
+      })
+      .catch(err => console.error('Gagal fetch akun:', err))
+      .finally(() => setLoadingAccounts(false));
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -45,61 +70,57 @@ export const UploadPage = () => {
       formData.append('file', files[0].file);
       const n8nWebhookUrl = 'https://n8n-n8n.wrmm9a.easypanel.host/webhook/2b2a8b50-a3f3-4234-9ce0-caef8903f973';
       const response = await axios.post(n8nWebhookUrl, formData);
-      let resultText = response.data?.caption || response.data?.text || "";
+      const resultText = response.data?.caption || response.data?.text || "";
       if (resultText) setCaption(resultText);
-    } catch (error) {
+    } catch {
       alert("Gagal menghubungi AI.");
     } finally {
       setIsGenerating(false);
     }
   };
 
-  // --- FUNGSI HANDLE UPLOAD (FIXED) ---
   const handleUpload = async () => {
     if (files.length === 0) return alert("Pilih minimal satu foto!");
     if (!caption.trim()) return alert("Tulis caption-mu dulu!");
+    if (!selectedAccountId) return alert("Pilih akun Instagram dulu!");
 
     setIsUploading(true);
     try {
-      // 1. Gabungkan Tanggal & Jam
       const [hours, minutes] = selectedTime.split(':');
-      const finalSchedule = new Date(selectedDate); 
+      const finalSchedule = new Date(selectedDate);
       finalSchedule.setHours(parseInt(hours), parseInt(minutes), 0);
 
-      // 2. Ambil Data User dari LocalStorage (Agar tidak statis ID 1 terus)
-      const currentUserId = localStorage.getItem('user_id') || '1';
+      const currentUserId = localStorage.getItem('user_id') || '';
       const currentUserName = localStorage.getItem('user_name') || 'Unknown';
 
       const formData = new FormData();
-      formData.append('file', files[0].file); 
-      
-      // Kirim data ke Backend
-      formData.append('user_id', currentUserId); 
-      formData.append('account_id', '1'); // Bisa disesuaikan jika ada pilihan akun IG
+      formData.append('file', files[0].file);
+      formData.append('user_id', currentUserId);
+      formData.append('account_id', selectedAccountId); // ✅ Pakai akun milik user
       formData.append('caption', caption);
-      formData.append('author_name', currentUserName); // <-- INI BIAR KOLOM AUTHOR TERISI
-      formData.append('status', 'pending'); 
+      formData.append('author_name', currentUserName);
+      formData.append('status', 'pending');
       formData.append('scheduled_time', finalSchedule.toISOString());
 
       const response = await axios.post('http://localhost:5000/api/posts', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      
+
       if (response.data.success) {
-        alert(`✅ Berhasil! Konten ${currentUserName} dijadwalkan.`);
+        alert(`✅ Berhasil! Konten dijadwalkan.`);
         setFiles([]);
         setCaption('');
         if (fileInputRef.current) fileInputRef.current.value = '';
       }
     } catch (error: any) {
-      console.error("Error Detail:", error.response?.data || error.message);
-      alert("Gagal menyimpan ke database.");
+      const errMsg = error.response?.data?.error || error.message;
+      console.error("Error Detail:", errMsg);
+      alert(`Gagal: ${errMsg}`);
     } finally {
       setIsUploading(false);
     }
   };
 
-  // ... (Sisa fungsi helper addFiles & removeFile tetap sama)
   const addFiles = (newFiles: File[]) => {
     const mappedFiles: UploadedFile[] = newFiles.map(file => ({
       id: crypto.randomUUID(),
@@ -118,8 +139,36 @@ export const UploadPage = () => {
     });
   };
 
+  // ✅ Blokir halaman kalau belum punya akun IG
+  if (!loadingAccounts && accounts.length === 0) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex-1 h-screen overflow-y-auto no-scrollbar pb-24 lg:pb-8"
+      >
+        <TopBar title="Upload Bahan Konten" subtitle="Siapkan materimu." isLoggedIn={true} onLogout={() => {}} />
+        <div className="flex flex-col items-center justify-center h-[70vh] gap-4 px-6 text-center">
+          <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center">
+            <AlertCircle size={32} className="text-amber-500" />
+          </div>
+          <h2 className="text-xl font-black">Belum Ada Akun Instagram</h2>
+          <p className="text-sm text-gray-500 max-w-xs">
+            Kamu harus menambahkan akun Instagram terlebih dahulu sebelum bisa menjadwalkan postingan.
+          </p>
+          <Link
+            to="/tambah-akun"
+            className="mt-2 px-6 py-3 bg-primary text-white rounded-full font-bold hover:brightness-110 transition-all"
+          >
+            Tambah Akun Instagram
+          </Link>
+        </div>
+      </motion.div>
+    );
+  }
+
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       className="flex-1 h-screen overflow-y-auto no-scrollbar pb-24 lg:pb-8"
@@ -128,9 +177,9 @@ export const UploadPage = () => {
 
       <div className="px-6 pt-4 lg:pt-8 max-w-5xl mx-auto space-y-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          
+
           <div className="lg:col-span-7 space-y-6">
-            <div 
+            <div
               onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
               onDragLeave={() => setIsDragging(false)}
               onDrop={(e) => {
@@ -170,11 +219,25 @@ export const UploadPage = () => {
 
           <div className="lg:col-span-5 space-y-6">
             <div className="bg-white rounded-3xl p-6 shadow-sm border border-outline-variant/50 space-y-6">
-              
+
+              {/* ✅ Pilih Akun Instagram */}
+              <div>
+                <label className="text-sm font-bold text-on-surface block mb-2">Akun Instagram</label>
+                <select
+                  value={selectedAccountId}
+                  onChange={(e) => setSelectedAccountId(e.target.value)}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-2xl py-3.5 px-4 outline-none focus:border-primary text-sm font-medium"
+                >
+                  {accounts.map(acc => (
+                    <option key={acc.id} value={acc.id}>@{acc.username}</option>
+                  ))}
+                </select>
+              </div>
+
               <div>
                 <div className="flex justify-between items-center mb-2">
                   <label className="text-sm font-bold text-on-surface">Caption Postingan</label>
-                  <button 
+                  <button
                     onClick={generateAICaption}
                     disabled={isGenerating || files.length === 0}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold bg-amber-500 text-white hover:bg-amber-600 disabled:bg-gray-200"
@@ -183,7 +246,7 @@ export const UploadPage = () => {
                     {isGenerating ? "AI Berpikir..." : "AI Generate"}
                   </button>
                 </div>
-                <textarea 
+                <textarea
                   value={caption}
                   onChange={(e) => setCaption(e.target.value)}
                   placeholder="Ceritakan sesuatu..."
@@ -195,7 +258,7 @@ export const UploadPage = () => {
                 <label className="flex items-center gap-2 text-sm font-bold mb-3">
                   <CalendarIcon size={18} className="text-primary" /> Tanggal Posting
                 </label>
-                <input 
+                <input
                   type="date"
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
@@ -209,7 +272,7 @@ export const UploadPage = () => {
                 </label>
                 <div className="grid grid-cols-1 gap-3">
                   {timeSlots.map((slot) => (
-                    <div 
+                    <div
                       key={slot.time}
                       onClick={() => setSelectedTime(slot.time)}
                       className={cn(
@@ -227,10 +290,10 @@ export const UploadPage = () => {
                 </div>
               </div>
 
-              <button 
+              <button
                 onClick={handleUpload}
-                disabled={isUploading}
-                className="w-full py-4 bg-primary text-white rounded-full font-bold shadow-lg flex items-center justify-center gap-2 hover:brightness-105 active:scale-95 transition-all"
+                disabled={isUploading || !selectedAccountId}
+                className="w-full py-4 bg-primary text-white rounded-full font-bold shadow-lg flex items-center justify-center gap-2 hover:brightness-105 active:scale-95 transition-all disabled:opacity-50"
               >
                 {isUploading ? <Loader2 className="animate-spin" size={20} /> : <Send size={20} />}
                 {isUploading ? 'Menyimpan...' : 'Jadwalkan Sekarang'}

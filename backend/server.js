@@ -28,15 +28,12 @@ app.post('/api/register', async (req, res) => {
       return res.status(400).json({ error: 'Semua field wajib diisi.' });
     }
 
-    // Cek apakah email sudah terdaftar
     const existing = await User.findOne({ where: { email } });
     if (existing) {
       return res.status(400).json({ error: 'Email sudah terdaftar.' });
     }
 
-    // Hash password sebelum disimpan
     const hashedPassword = await bcrypt.hash(password, 10);
-
     const newUser = await User.create({ name, email, password: hashedPassword });
 
     res.json({ success: true, id: newUser.id, name: newUser.name });
@@ -96,19 +93,39 @@ app.post('/api/posts', upload.single('file'), async (req, res) => {
   try {
     const { user_id, account_id, caption, scheduled_time, author_name } = req.body;
 
-    if (!req.file) return res.status(400).json({ error: 'File tidak ditemukan!' });
+    if (!req.file) {
+      return res.status(400).json({ error: 'File tidak ditemukan!' });
+    }
 
-    const cleanUserId = user_id && user_id !== 'undefined' ? parseInt(user_id) : 1;
-    const cleanAccountId = account_id && account_id !== 'undefined' ? parseInt(account_id) : 1;
+    // ✅ Wajib ada account_id — tidak ada fallback ke ID orang lain
+    if (!account_id || account_id === 'undefined') {
+      return res.status(400).json({ error: 'Akun Instagram belum dipilih. Tambahkan akun dulu.' });
+    }
+
+    if (!user_id || user_id === 'undefined') {
+      return res.status(400).json({ error: 'User tidak valid. Coba login ulang.' });
+    }
+
+    const parsedUserId = parseInt(user_id);
+    const parsedAccountId = parseInt(account_id);
+
+    // ✅ Pastikan account_id ini benar-benar milik user yang sedang login
+    const account = await Account.findOne({
+      where: { id: parsedAccountId, user_id: parsedUserId }
+    });
+
+    if (!account) {
+      return res.status(403).json({ error: 'Akun Instagram tidak valid atau bukan milikmu.' });
+    }
 
     const newMedia = await Media.create({
-      user_id: cleanUserId,
+      user_id: parsedUserId,
       file_url: `/uploads/${req.file.filename}`,
       file_type: req.file.mimetype.startsWith('video') ? 'video' : 'image'
     });
 
     const newPost = await Post.create({
-      account_id: cleanAccountId,
+      account_id: parsedAccountId,
       media_id: newMedia.id,
       author: author_name || 'Guest',
       caption: caption || '',
@@ -127,10 +144,13 @@ app.post('/api/posts', upload.single('file'), async (req, res) => {
 app.post('/api/accounts', async (req, res) => {
   try {
     const { user_id, username } = req.body;
-    const cleanUserId = user_id && user_id !== 'undefined' ? parseInt(user_id) : 1;
+
+    if (!user_id || user_id === 'undefined') {
+      return res.status(400).json({ error: 'User tidak valid.' });
+    }
 
     const newAccount = await Account.create({
-      user_id: cleanUserId,
+      user_id: parseInt(user_id),
       username,
       session: '-',
       status: 'active'
