@@ -2,11 +2,12 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import { motion } from 'framer-motion';
-import { Mail, Lock, ArrowRight, Sparkles, Loader2 } from 'lucide-react';
+import { User, Mail, Lock, ArrowRight, Sparkles, Loader2 } from 'lucide-react';
 
-export const LoginPage = () => {
+export const RegisterPage = () => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
+    name: '',
     email: '',
     password: ''
   });
@@ -19,7 +20,7 @@ export const LoginPage = () => {
     setError('');
 
     try {
-      const response = await axios.post('http://localhost:5000/api/login', formData);
+      const response = await axios.post('http://localhost:5000/api/register', formData);
 
       if (response.data && response.data.id) {
         saveSession(response.data.name, response.data.id);
@@ -29,7 +30,7 @@ export const LoginPage = () => {
     } catch (err: any) {
       const errorMessage = err.response?.data?.error || 'Terjadi kesalahan koneksi server.';
       setError(errorMessage);
-      console.error('Login Error:', err);
+      console.error('Register Error:', err);
     } finally {
       setLoading(false);
     }
@@ -60,16 +61,31 @@ export const LoginPage = () => {
             <Sparkles size={80} />
           </motion.div>
 
-          <h2 className="text-3xl font-black tracking-tight relative z-10">
-            Selamat Datang
-          </h2>
+          <h2 className="text-3xl font-black tracking-tight relative z-10">Buat Akun</h2>
           <p className="text-white/80 text-sm mt-2 font-medium relative z-10">
-            Masuk ke Dashboard Kreator Anda.
+            Gabung SiKreator sekarang.
           </p>
         </div>
 
         {/* Form Section */}
         <form onSubmit={handleSubmit} className="p-8 space-y-5">
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-gray-500 uppercase ml-1">Nama Lengkap</label>
+            <div className="relative flex items-center group">
+              <User
+                className="absolute left-4 text-gray-400 group-focus-within:text-primary transition-colors"
+                size={18}
+              />
+              <input
+                required
+                type="text"
+                placeholder="Contoh: Sekar"
+                className="w-full bg-gray-50 border border-gray-200 rounded-2xl py-3.5 pl-12 pr-4 outline-none focus:border-primary focus:bg-white transition-all text-sm"
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              />
+            </div>
+          </div>
+
           <div className="space-y-2">
             <label className="text-xs font-bold text-gray-500 uppercase ml-1">
               Email / Username
@@ -125,19 +141,19 @@ export const LoginPage = () => {
               <Loader2 className="w-5 h-5 animate-spin" />
             ) : (
               <>
-                Masuk Sekarang
+                Daftar Sekarang
                 <ArrowRight size={18} />
               </>
             )}
           </button>
 
           <p className="text-center text-xs text-gray-500 font-medium pt-4">
-            Belum punya akun?{' '}
+            Sudah punya akun?{' '}
             <Link
-              to="/register"
+              to="/login"
               className="text-primary font-bold ml-1 hover:underline transition-all"
             >
-              Daftar di sini
+              Masuk di sini
             </Link>
           </p>
         </form>

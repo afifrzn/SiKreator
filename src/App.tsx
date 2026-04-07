@@ -5,17 +5,22 @@ import { Dashboard } from './pages/Dashboard';
 import { CalendarPage } from './pages/CalendarPage';
 import { UploadPage } from './pages/UploadPage';
 import { LoginPage } from './pages/LoginPage';
-import { Home, Sparkles, Calendar, BarChart3, Plus, Upload } from 'lucide-react';
+import { RegisterPage } from './pages/RegisterPage';
+import { AiAssistantPage } from './pages/AiAssistantPage';
+import { HeatmapPage } from './pages/HeatmapPage';
+import { Home, Sparkles, Calendar, BarChart3, Plus } from 'lucide-react';
 import { cn } from './lib/utils';
+import { AddAccountPage } from './pages/AddAccountPage';
 
 const MobileNav = () => {
   const location = useLocation();
   
   const navItems = [
     { icon: Home, label: 'Beranda', path: '/' },
-    { icon: Sparkles, label: 'AI', path: '/ai' },
+    { icon: Sparkles, label: 'AI', path: '/ai-assistant' },
     { icon: Calendar, label: 'Jadwal', path: '/calendar' },
-    { icon: BarChart3, label: 'Wawasan', path: '/insights' },
+    { icon: BarChart3, label: 'Wawasan', path: '/heatmap' },
+    { icon: Home, label: 'Akun', path: '/tambah-akun' }
   ];
 
   return (
@@ -29,7 +34,7 @@ const MobileNav = () => {
             className={cn(
               "flex flex-col items-center justify-center p-2 transition-all duration-300 ease-out active:scale-90",
               isActive 
-                ? "bg-primary text-white rounded-2xl p-3 mb-2 scale-110" 
+                ? "bg-primary text-white rounded-2xl p-3 mb-2 scale-110 shadow-lg shadow-primary/20" 
                 : "text-on-surface opacity-50"
             )}
           >
@@ -42,11 +47,14 @@ const MobileNav = () => {
   );
 };
 
+// Daftar path yang tidak pakai layout utama (tanpa Sidebar, MobileNav, dll)
+const AUTH_PATHS = ['/login', '/register'];
+
 const MainLayout = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
-  const isLoginPage = location.pathname === '/login';
+  const isAuthPage = AUTH_PATHS.includes(location.pathname);
 
-  if (isLoginPage) return <>{children}</>;
+  if (isAuthPage) return <>{children}</>;
 
   return (
     <div className="bg-background text-on-surface min-h-screen flex overflow-hidden">
@@ -56,7 +64,7 @@ const MainLayout = ({ children }: { children: React.ReactNode }) => {
         {children}
         <MobileNav />
         
-        {/* Floating Action Button (Mobile Only) */}
+        {/* Floating Action Button */}
         <Link 
           to="/upload"
           className="fixed bottom-24 right-8 w-16 h-16 bg-primary text-white rounded-full shadow-2xl flex items-center justify-center hover:scale-110 transition-transform z-40 lg:hidden active:scale-95"
@@ -74,10 +82,14 @@ export default function App() {
       <MainLayout>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
           <Route path="/" element={<Dashboard />} />
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/upload" element={<UploadPage />} />
-          {/* Fallback for other routes */}
+          <Route path="/ai-assistant" element={<AiAssistantPage />} />
+          <Route path="/heatmap" element={<HeatmapPage />} />
+          <Route path="/tambah-akun" element={<AddAccountPage />} />
+          {/* Fallback */}
           <Route path="*" element={<Dashboard />} />
         </Routes>
       </MainLayout>

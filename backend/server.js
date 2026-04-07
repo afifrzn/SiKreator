@@ -1,36 +1,160 @@
 import express from 'express';
 import cors from 'cors';
-import 'dotenv/config';
-import path from 'path'; // Tambahkan ini
-import { fileURLToPath } from 'url'; // Tambahkan ini jika pakai Type: Module
-import { sequelize } from './models/index.js'; 
-import postRoutes from './routes/postRoutes.js';
-import accountRoutes from './routes/accountRoutes.js';
-
-const __filename = fileURLToPath(import.meta.url); // Tambahkan ini
-const __dirname = path.dirname(__filename); // Tambahkan ini
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import bcrypt from 'bcrypt';
+import { sequelize, User, Media, Post, Account } from './models/index.js';
 
 const app = express();
-
-// Middleware
 app.use(cors());
 app.use(express.json());
+app.use('/uploads', express.static('uploads'));
 
-// --- FIX: IZINKAN AKSES FOLDER UPLOADS ---
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+if (!fs.existsSync('uploads')) fs.mkdirSync('uploads');
 
-// Routes
-app.use('/api/posts', postRoutes);
-app.use('/api/accounts', accountRoutes);
+const storage = multer.diskStorage({
+  destination: 'uploads/',
+  filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname))
+});
+const upload = multer({ storage });
 
-const PORT = process.env.PORT || 5000;
+// --- AUTH: REGISTER ---
+app.post('/api/register', async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
 
-// Database Sync & Server Start
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: 'Semua field wajib diisi.' });
+    }
+
+    // Cek apakah email sudah terdaftar
+    const existing = await User.findOne({ where: { email } });
+    if (existing) {
+      return res.status(400).json({ error: 'Email sudah terdaftar.' });
+    }
+
+    // Hash password sebelum disimpan
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const newUser = await User.create({ name, email, password: hashedPassword });
+
+    res.json({ success: true, id: newUser.id, name: newUser.name });
+  } catch (err) {
+    console.error('❌ Register error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- AUTH: LOGIN ---
+app.post('/api/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email dan password wajib diisi.' });
+    }
+
+    const user = await User.findOne({ where: { email } });
+    if (!user) {
+      return res.status(401).json({ error: 'Email tidak ditemukan.' });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ error: 'Password salah.' });
+    }
+
+    res.json({ success: true, id: user.id, name: user.name });
+  } catch (err) {
+    console.error('❌ Login error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- 1. GET POSTS ---
+app.get('/api/posts', async (req, res) => {
+  try {
+    const { author } = req.query;
+    const whereCondition = author ? { author } : {};
+    const posts = await Post.findAll({
+      where: whereCondition,
+      include: [
+        { model: Media, attributes: ['file_url', 'file_type'] },
+        { model: Account, attributes: ['username'] }
+      ],
+      order: [['scheduled_time', 'ASC']]
+    });
+    res.json(posts);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- 2. CREATE POST ---
+app.post('/api/posts', upload.single('file'), async (req, res) => {
+  try {
+    const { user_id, account_id, caption, scheduled_time, author_name } = req.body;
+
+    if (!req.file) return res.status(400).json({ error: 'File tidak ditemukan!' });
+
+    const cleanUserId = user_id && user_id !== 'undefined' ? parseInt(user_id) : 1;
+    const cleanAccountId = account_id && account_id !== 'undefined' ? parseInt(account_id) : 1;
+
+    const newMedia = await Media.create({
+      user_id: cleanUserId,
+      file_url: `/uploads/${req.file.filename}`,
+      file_type: req.file.mimetype.startsWith('video') ? 'video' : 'image'
+    });
+
+    const newPost = await Post.create({
+      account_id: cleanAccountId,
+      media_id: newMedia.id,
+      author: author_name || 'Guest',
+      caption: caption || '',
+      scheduled_time,
+      status: 'pending'
+    });
+
+    res.json({ success: true, data: newPost });
+  } catch (err) {
+    console.error('❌ ERROR POST:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// --- 3. CREATE ACCOUNT ---
+app.post('/api/accounts', async (req, res) => {
+  try {
+    const { user_id, username } = req.body;
+    const cleanUserId = user_id && user_id !== 'undefined' ? parseInt(user_id) : 1;
+
+    const newAccount = await Account.create({
+      user_id: cleanUserId,
+      username,
+      session: '-',
+      status: 'active'
+    });
+    res.json({ success: true, data: newAccount });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- 4. GET ACCOUNTS ---
+app.get('/api/accounts', async (req, res) => {
+  try {
+    const { user_id } = req.query;
+    const whereCondition = user_id ? { user_id: parseInt(user_id) } : {};
+    const accounts = await Account.findAll({ where: whereCondition });
+    res.json(accounts);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 sequelize.sync({ alter: true }).then(() => {
-  console.log('✅ Database connected & synced');
-  app.listen(PORT, () => {
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
+  app.listen(5000, () => {
+    console.log('🚀 Server SiKreator Berjalan di Port 5000');
   });
-}).catch((err) => {
-  console.error('❌ Unable to connect to the database:', err);
 });

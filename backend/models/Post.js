@@ -3,16 +3,15 @@ import sequelize from '../config/database.js';
 
 const Post = sequelize.define('Post', {
   id: { type: DataTypes.INTEGER(11), primaryKey: true, autoIncrement: true },
-  user_id: { type: DataTypes.INTEGER(11), allowNull: false },
-  instagram_account_id: { type: DataTypes.INTEGER(11), allowNull: false },
-  media_url: { type: DataTypes.TEXT, allowNull: false },
+  account_id: { type: DataTypes.INTEGER(11), allowNull: false },
+  media_id: { type: DataTypes.INTEGER(11), allowNull: false },
+  author: { type: DataTypes.STRING, allowNull: false }, // Penanda pemilik konten
   caption: { type: DataTypes.TEXT },
-  scheduled_at: { type: DataTypes.DATE },
+  scheduled_time: { type: DataTypes.DATE },
   status: { 
-    type: DataTypes.ENUM('draft', 'scheduled', 'processing', 'posted', 'failed'),
-    defaultValue: 'draft'
-  },
-  retry_count: { type: DataTypes.INTEGER(11), defaultValue: 0 }
+    type: DataTypes.ENUM('pending', 'posted', 'failed'),
+    defaultValue: 'pending'
+  }
 }, { 
   tableName: 'posts', 
   createdAt: 'created_at', 

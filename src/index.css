@@ -2,9 +2,11 @@
 @import "tailwindcss";
 
 @theme {
+  /* Font Configuration */
   --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
   --font-headline: "Plus Jakarta Sans", sans-serif;
 
+  /* Brand Colors */
   --color-primary: #4c40df;
   --color-primary-dim: #4030d3;
   --color-primary-container: #9995ff;
@@ -17,6 +19,7 @@
   --color-tertiary-dim: #843a00;
   --color-tertiary-container: #ff9655;
   
+  /* Surface & Background Colors */
   --color-background: #fbf4ff;
   --color-surface: #fbf4ff;
   --color-surface-container: #ede4ff;
@@ -25,6 +28,7 @@
   --color-surface-container-high: #e8ddff;
   --color-surface-container-highest: #e3d7ff;
   
+  /* Text & Outline Colors */
   --color-on-surface: #32284f;
   --color-on-surface-variant: #60557f;
   
@@ -44,8 +48,21 @@
   h1, h2, h3, h4, h5, h6 {
     @apply font-headline;
   }
+
+  /* Typography Plugin Integration for AI Responses */
+  .prose {
+    --tw-prose-body: var(--color-on-surface);
+    --tw-prose-headings: var(--color-primary);
+    --tw-prose-bold: var(--color-on-surface);
+    --tw-prose-bullets: var(--color-primary-container);
+    --tw-prose-links: var(--color-primary);
+    --tw-prose-code: var(--color-secondary);
+    --tw-prose-quotes: var(--color-on-surface-variant);
+    max-width: none;
+  }
 }
 
+/* Custom Utility Classes */
 .glass {
   background: rgba(255, 255, 255, 0.7);
   backdrop-filter: blur(20px);
@@ -56,12 +73,11 @@
   backdrop-filter: blur(20px);
 }
 
-/* Hide scrollbar for Chrome, Safari and Opera */
+/* Scrollbar Utilities */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
 
-/* Hide scrollbar for IE, Edge and Firefox */
 .no-scrollbar {
   -ms-overflow-style: none;  /* IE and Edge */
   scrollbar-width: none;  /* Firefox */

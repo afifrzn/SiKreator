@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { TopBar } from '../components/TopBar';
 import { cn } from '../lib/utils';
-import { Upload, X, Send, Loader2, Clock, Sparkles } from 'lucide-react';
+import { Upload, X, Send, Loader2, Clock, Sparkles, Calendar as CalendarIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import axios from 'axios';
 
@@ -18,10 +18,12 @@ export const UploadPage = () => {
   const [caption, setCaption] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedTime, setSelectedTime] = useState('20:00');
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Cleanup memori browser saat pindah halaman
   useEffect(() => {
     return () => {
       files.forEach(file => URL.revokeObjectURL(file.preview));
@@ -35,86 +37,69 @@ export const UploadPage = () => {
     { label: 'Malam (Prime)', time: '20:00', desc: 'Engagement paling tinggi' },
   ];
 
-  // 1. FUNGSI GENERATE CAPTION (Minta bantuan AI n8n)
   const generateAICaption = async () => {
     if (files.length === 0) return alert("Upload foto dulu biar AI bisa lihat kontennya!");
-
     setIsGenerating(true);
     try {
       const formData = new FormData();
       formData.append('file', files[0].file);
-
-      // Menggunakan URL Webhook Production agar n8n jalan terus
       const n8nWebhookUrl = 'https://n8n-n8n.wrmm9a.easypanel.host/webhook/2b2a8b50-a3f3-4234-9ce0-caef8903f973';
-      
-      const response = await axios.post(n8nWebhookUrl, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-
-      console.log("Respon n8n:", response.data);
-
-      let resultText = "";
-      // Mengecek apakah respon n8n berbentuk array atau object
-      if (Array.isArray(response.data) && response.data.length > 0) {
-        const firstItem = response.data[0];
-        resultText = firstItem.caption || firstItem.text || firstItem.output || "";
-      } else if (response.data) {
-        resultText = response.data.caption || response.data.text || response.data.output || "";
-      }
-
-      if (resultText) {
-        setCaption(resultText);
-      } else {
-        alert("n8n merespon, tapi teks caption tidak ditemukan.");
-      }
+      const response = await axios.post(n8nWebhookUrl, formData);
+      let resultText = response.data?.caption || response.data?.text || "";
+      if (resultText) setCaption(resultText);
     } catch (error) {
-      console.error("Gagal generate caption:", error);
-      alert("Gagal menghubungi n8n. Pastikan workflow sudah ACTIVE.");
+      alert("Gagal menghubungi AI.");
     } finally {
       setIsGenerating(false);
     }
   };
 
-  // 2. FUNGSI SIMPAN KE DATABASE (Backend Lokal)
+  // --- FUNGSI HANDLE UPLOAD (FIXED) ---
   const handleUpload = async () => {
-    if (files.length === 0) return alert("Pilih minimal satu foto atau video!");
+    if (files.length === 0) return alert("Pilih minimal satu foto!");
     if (!caption.trim()) return alert("Tulis caption-mu dulu!");
 
     setIsUploading(true);
     try {
-      const scheduledDate = new Date();
+      // 1. Gabungkan Tanggal & Jam
       const [hours, minutes] = selectedTime.split(':');
-      scheduledDate.setHours(parseInt(hours), parseInt(minutes), 0);
+      const finalSchedule = new Date(selectedDate); 
+      finalSchedule.setHours(parseInt(hours), parseInt(minutes), 0);
 
-      // --- PERBAIKAN UTAMA: MENGIRIM FILE ASLI KE BACKEND ---
+      // 2. Ambil Data User dari LocalStorage (Agar tidak statis ID 1 terus)
+      const currentUserId = localStorage.getItem('user_id') || '1';
+      const currentUserName = localStorage.getItem('user_name') || 'Unknown';
+
       const formData = new FormData();
-      formData.append('image', files[0].file); // Backend harus baca field 'image'
-      formData.append('user_id', '1');
-      formData.append('instagram_account_id', '1');
+      formData.append('file', files[0].file); 
+      
+      // Kirim data ke Backend
+      formData.append('user_id', currentUserId); 
+      formData.append('account_id', '1'); // Bisa disesuaikan jika ada pilihan akun IG
       formData.append('caption', caption);
-      formData.append('status', 'scheduled');
-      formData.append('scheduled_at', scheduledDate.toISOString());
+      formData.append('author_name', currentUserName); // <-- INI BIAR KOLOM AUTHOR TERISI
+      formData.append('status', 'pending'); 
+      formData.append('scheduled_time', finalSchedule.toISOString());
 
-      await axios.post('http://localhost:5000/api/posts', formData, {
+      const response = await axios.post('http://localhost:5000/api/posts', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       
-      alert(`✅ Berhasil! Postingan dijadwalkan jam ${selectedTime}`);
-      
-      // Reset form setelah berhasil
-      files.forEach(f => URL.revokeObjectURL(f.preview));
-      setFiles([]);
-      setCaption('');
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      
+      if (response.data.success) {
+        alert(`✅ Berhasil! Konten ${currentUserName} dijadwalkan.`);
+        setFiles([]);
+        setCaption('');
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
     } catch (error: any) {
-      console.error("Upload error:", error);
-      alert("Gagal menyimpan. Pastikan backend sudah support upload file (Multer).");
+      console.error("Error Detail:", error.response?.data || error.message);
+      alert("Gagal menyimpan ke database.");
     } finally {
       setIsUploading(false);
     }
   };
 
+  // ... (Sisa fungsi helper addFiles & removeFile tetap sama)
   const addFiles = (newFiles: File[]) => {
     const mappedFiles: UploadedFile[] = newFiles.map(file => ({
       id: crypto.randomUUID(),
@@ -139,12 +124,11 @@ export const UploadPage = () => {
       animate={{ opacity: 1, y: 0 }}
       className="flex-1 h-screen overflow-y-auto no-scrollbar pb-24 lg:pb-8"
     >
-      <TopBar title="Upload Bahan Konten" subtitle="Siapkan materi terbaikmu." />
+      <TopBar title="Upload Bahan Konten" subtitle={`Halo ${localStorage.getItem('user_name')}, siapkan materimu.`} isLoggedIn={true} onLogout={() => {}} />
 
       <div className="px-6 pt-4 lg:pt-8 max-w-5xl mx-auto space-y-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           
-          {/* Kolom Kiri: Dropzone */}
           <div className="lg:col-span-7 space-y-6">
             <div 
               onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
@@ -164,17 +148,17 @@ export const UploadPage = () => {
               <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center text-primary mb-4">
                 <Upload size={32} />
               </div>
-              <h3 className="text-xl font-bold">Tarik & Lepas Konten</h3>
-              <p className="text-sm text-gray-500">Maks. 50MB per file</p>
+              <h3 className="text-xl font-bold text-center">Tarik & Lepas Konten</h3>
+              <p className="text-sm text-gray-500 text-center">Klik atau seret file ke sini</p>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
               <AnimatePresence>
                 {files.map((file) => (
-                  <motion.div key={file.id} layout initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }} className="relative aspect-square rounded-2xl overflow-hidden group shadow-md">
+                  <motion.div key={file.id} layout initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }} className="relative aspect-square rounded-2xl overflow-hidden group shadow-md border">
                     {file.type === 'video' ? <video src={file.preview} className="w-full h-full object-cover" /> : <img src={file.preview} className="w-full h-full object-cover" />}
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                      <button onClick={(e) => { e.stopPropagation(); removeFile(file.id); }} className="p-2 bg-red-500 rounded-full text-white">
+                      <button onClick={(e) => { e.stopPropagation(); removeFile(file.id); }} className="p-2 bg-red-500 rounded-full text-white hover:bg-red-600 transition-colors">
                         <X size={20} />
                       </button>
                     </div>
@@ -184,49 +168,60 @@ export const UploadPage = () => {
             </div>
           </div>
 
-          {/* Kolom Kanan: Detail & Schedule */}
           <div className="lg:col-span-5 space-y-6">
-            <div className="bg-white rounded-3xl p-6 shadow-sm border space-y-6">
+            <div className="bg-white rounded-3xl p-6 shadow-sm border border-outline-variant/50 space-y-6">
+              
               <div>
                 <div className="flex justify-between items-center mb-2">
-                  <label className="text-sm font-bold">Caption Postingan</label>
+                  <label className="text-sm font-bold text-on-surface">Caption Postingan</label>
                   <button 
                     onClick={generateAICaption}
                     disabled={isGenerating || files.length === 0}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold bg-amber-500 text-white hover:bg-amber-600 disabled:bg-gray-200"
                   >
                     {isGenerating ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-                    {isGenerating ? "AI Berpikir..." : "Buatkan Caption (AI)"}
+                    {isGenerating ? "AI Berpikir..." : "AI Generate"}
                   </button>
                 </div>
                 <textarea 
                   value={caption}
                   onChange={(e) => setCaption(e.target.value)}
-                  placeholder="Tulis caption..."
-                  className="w-full h-24 bg-gray-50 rounded-2xl p-4 text-sm outline-none border focus:border-primary/50"
+                  placeholder="Ceritakan sesuatu..."
+                  className="w-full h-24 bg-gray-50 rounded-2xl p-4 text-sm outline-none border border-transparent focus:border-primary/30"
+                />
+              </div>
+
+              <div>
+                <label className="flex items-center gap-2 text-sm font-bold mb-3">
+                  <CalendarIcon size={18} className="text-primary" /> Tanggal Posting
+                </label>
+                <input 
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="w-full p-4 bg-gray-50 rounded-2xl outline-none text-sm font-medium border border-transparent focus:border-primary/30"
                 />
               </div>
 
               <div>
                 <label className="flex items-center gap-2 text-sm font-bold mb-4">
-                  <Clock size={18} className="text-primary" />
-                  Waktu Posting
+                  <Clock size={18} className="text-primary" /> Pilih Jam Tayang
                 </label>
-                <div className="space-y-3">
+                <div className="grid grid-cols-1 gap-3">
                   {timeSlots.map((slot) => (
                     <div 
                       key={slot.time}
                       onClick={() => setSelectedTime(slot.time)}
                       className={cn(
                         "p-4 rounded-2xl border-2 transition-all cursor-pointer flex justify-between items-center",
-                        selectedTime === slot.time ? "border-primary bg-primary/5" : "border-gray-100 hover:border-primary/20"
+                        selectedTime === slot.time ? "border-primary bg-primary/5" : "border-gray-50 bg-gray-50/50"
                       )}
                     >
                       <div>
-                        <div className="text-xs font-bold text-primary">{slot.label}</div>
-                        <div className="text-[10px] text-gray-500">{slot.desc}</div>
+                        <div className={cn("text-xs font-bold", selectedTime === slot.time ? "text-primary" : "text-gray-500")}>{slot.label}</div>
+                        <div className="text-[10px] text-gray-400">{slot.desc}</div>
                       </div>
-                      <div className="text-lg font-black">{slot.time}</div>
+                      <div className={cn("text-lg font-black", selectedTime === slot.time ? "text-primary" : "text-gray-300")}>{slot.time}</div>
                     </div>
                   ))}
                 </div>
@@ -235,10 +230,10 @@ export const UploadPage = () => {
               <button 
                 onClick={handleUpload}
                 disabled={isUploading}
-                className="w-full py-4 bg-primary text-white rounded-full font-bold shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full py-4 bg-primary text-white rounded-full font-bold shadow-lg flex items-center justify-center gap-2 hover:brightness-105 active:scale-95 transition-all"
               >
                 {isUploading ? <Loader2 className="animate-spin" size={20} /> : <Send size={20} />}
-                {isUploading ? 'Menyimpan...' : 'Jadwalkan Postingan'}
+                {isUploading ? 'Menyimpan...' : 'Jadwalkan Sekarang'}
               </button>
             </div>
           </div>
