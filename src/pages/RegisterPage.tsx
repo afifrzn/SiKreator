@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import { motion } from 'framer-motion';
 import { User, Mail, Lock, ArrowRight, Sparkles, Loader2 } from 'lucide-react';
+import { api } from '../lib/api';
 
 export const RegisterPage = () => {
   const navigate = useNavigate();
@@ -20,7 +21,7 @@ export const RegisterPage = () => {
     setError('');
 
     try {
-      const response = await axios.post('http://localhost:5000/api/register', formData);
+      const response = await api.post('/register', formData);
 
       if (response.data && response.data.id) {
         saveSession(response.data.name, response.data.id);

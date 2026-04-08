@@ -5,6 +5,7 @@ import { Upload, X, Send, Loader2, Clock, Sparkles, Calendar as CalendarIcon, Al
 import { motion, AnimatePresence } from 'motion/react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
+import { api } from '../lib/api';
 
 interface UploadedFile {
   id: string;
@@ -39,7 +40,7 @@ export const UploadPage = () => {
     const userId = localStorage.getItem('user_id');
     if (!userId) return;
 
-    axios.get(`http://localhost:5000/api/accounts?user_id=${userId}`)
+    api.get(`/accounts?user_id=${userId}`)
       .then(res => {
         setAccounts(res.data);
         // Auto-select akun pertama jika ada
@@ -102,7 +103,7 @@ export const UploadPage = () => {
       formData.append('status', 'pending');
       formData.append('scheduled_time', finalSchedule.toISOString());
 
-      const response = await axios.post('http://localhost:5000/api/posts', formData, {
+      const response = await api.post('/posts', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 

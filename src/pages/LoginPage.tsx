@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import { motion } from 'framer-motion';
 import { Mail, Lock, ArrowRight, Sparkles, Loader2 } from 'lucide-react';
+import { api } from '../lib/api';
 
 // ✅ cukup sekali di sini
 axios.defaults.withCredentials = true;
@@ -24,8 +25,8 @@ export const LoginPage = () => {
     setError('');
 
     try {
-      const response = await axios.post(
-        'http://localhost:5000/api/login',
+      const response = await api.post(
+        '/login',
         formData
       );
 

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { Camera, Save, Loader2 } from 'lucide-react';
+import { api } from '../lib/api';
 
 // ✅ Penting: biar kirim cookie/session ke backend
 axios.defaults.withCredentials = true;
@@ -18,8 +19,8 @@ export const AddAccountPage = () => {
     setLoading(true);
 
     try {
-      await axios.post(
-        'http://localhost:5000/api/accounts',
+      await api.post(
+        '/accounts',
         {
           username: formData.username,
           session: formData.session,

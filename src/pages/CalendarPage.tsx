@@ -3,8 +3,7 @@ import axios from 'axios';
 import { cn } from '../lib/utils';
 import { PlusCircle, Sparkles, TrendingUp, Rocket, Clock, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { motion } from 'motion/react';
-
-const API_BASE_URL = 'http://localhost:5000';
+import { api } from '../lib/api';
 
 export const CalendarPage = () => {
   const [scheduledPosts, setScheduledPosts] = useState<any[]>([]);
@@ -17,7 +16,7 @@ export const CalendarPage = () => {
   const fetchPosts = async () => {
     setIsLoading(true);
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/posts`);
+      const response = await api.get('/posts');
       const allData = Array.isArray(response.data) ? response.data : [];
 
       // --- PERBAIKAN 2: Filter data agar hanya muncul milik user yang login ---

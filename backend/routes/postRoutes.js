@@ -1,7 +1,10 @@
 import express from 'express';
 import multer from 'multer';
 import path from 'path';
+import dotenv from 'dotenv';
 import { Post, InstagramAccount } from '../models/index.js';
+
+dotenv.config();
 
 const router = express.Router();
 
@@ -40,7 +43,8 @@ router.post('/', upload.single('image'), async (req, res) => {
       return res.status(400).json({ message: "File gambar tidak diterima oleh server!" });
     }
 
-    const media_url = `http://localhost:5000/uploads/${req.file.filename}`;
+    const baseUrl = process.env.VITE_API_URL || 'http://localhost:5000';
+    const media_url = `${baseUrl}/uploads/${req.file.filename}`;
 
     // --- PROSES SIMPAN KE DATABASE ---
     const post = await Post.create({

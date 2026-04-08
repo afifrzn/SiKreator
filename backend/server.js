@@ -5,25 +5,33 @@ import path from 'path';
 import fs from 'fs';
 import bcrypt from 'bcrypt';
 import session from 'express-session';
+import dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
 
 import { sequelize, User, Media, Post, Account } from './models/index.js';
 
 const app = express();
 
+const PORT = process.env.PORT || 5000;
+const CORS_ORIGINS = (process.env.CORS_ORIGIN || 'http://localhost:3000,http://localhost:5173').split(',');
+const SESSION_SECRET = process.env.SESSION_SECRET || 'secret-key';
+
 // ================= CONFIG =================
 app.use(cors({
-  origin: 'http://localhost:3000',
+  origin: CORS_ORIGINS,
   credentials: true
 }));
 
 app.use(express.json());
 
 app.use(session({
-  secret: 'secret-key',
+  secret: SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: false, // true kalau pakai HTTPS
+    secure: process.env.NODE_ENV === 'production', // true kalau pakai HTTPS
     httpOnly: true
   }
 }));
