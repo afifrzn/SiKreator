@@ -1,17 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import axios from 'axios';
 import { motion } from 'framer-motion';
 import { User, Mail, Lock, ArrowRight, Sparkles, Loader2 } from 'lucide-react';
 import { api } from '../lib/api';
 
+// ✅ Hapus import axios — tidak dipakai sama sekali
+
 export const RegisterPage = () => {
   const navigate = useNavigate();
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    password: ''
-  });
+  const [formData, setFormData] = useState({ name: '', email: '', password: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -22,16 +19,13 @@ export const RegisterPage = () => {
 
     try {
       const response = await api.post('/register', formData);
-
       if (response.data && response.data.id) {
         saveSession(response.data.name, response.data.id);
       } else {
         setError('Respons server tidak valid.');
       }
     } catch (err: any) {
-      const errorMessage = err.response?.data?.error || 'Terjadi kesalahan koneksi server.';
-      setError(errorMessage);
-      console.error('Register Error:', err);
+      setError(err.response?.data?.error || 'Terjadi kesalahan koneksi server.');
     } finally {
       setLoading(false);
     }
@@ -52,7 +46,6 @@ export const RegisterPage = () => {
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl shadow-primary/10 border border-gray-100 overflow-hidden"
       >
-        {/* Header Section */}
         <div className="bg-primary p-10 text-white text-center relative overflow-hidden">
           <motion.div
             animate={{ rotate: [0, 15, -15, 0], scale: [1, 1.1, 1] }}
@@ -61,22 +54,15 @@ export const RegisterPage = () => {
           >
             <Sparkles size={80} />
           </motion.div>
-
           <h2 className="text-3xl font-black tracking-tight relative z-10">Buat Akun</h2>
-          <p className="text-white/80 text-sm mt-2 font-medium relative z-10">
-            Gabung SiKreator sekarang.
-          </p>
+          <p className="text-white/80 text-sm mt-2 font-medium relative z-10">Gabung SiKreator sekarang.</p>
         </div>
 
-        {/* Form Section */}
         <form onSubmit={handleSubmit} className="p-8 space-y-5">
           <div className="space-y-2">
             <label className="text-xs font-bold text-gray-500 uppercase ml-1">Nama Lengkap</label>
             <div className="relative flex items-center group">
-              <User
-                className="absolute left-4 text-gray-400 group-focus-within:text-primary transition-colors"
-                size={18}
-              />
+              <User className="absolute left-4 text-gray-400 group-focus-within:text-primary transition-colors" size={18} />
               <input
                 required
                 type="text"
@@ -88,14 +74,9 @@ export const RegisterPage = () => {
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs font-bold text-gray-500 uppercase ml-1">
-              Email / Username
-            </label>
+            <label className="text-xs font-bold text-gray-500 uppercase ml-1">Email / Username</label>
             <div className="relative flex items-center group">
-              <Mail
-                className="absolute left-4 text-gray-400 group-focus-within:text-primary transition-colors"
-                size={18}
-              />
+              <Mail className="absolute left-4 text-gray-400 group-focus-within:text-primary transition-colors" size={18} />
               <input
                 required
                 type="text"
@@ -109,10 +90,7 @@ export const RegisterPage = () => {
           <div className="space-y-2">
             <label className="text-xs font-bold text-gray-500 uppercase ml-1">Password</label>
             <div className="relative flex items-center group">
-              <Lock
-                className="absolute left-4 text-gray-400 group-focus-within:text-primary transition-colors"
-                size={18}
-              />
+              <Lock className="absolute left-4 text-gray-400 group-focus-within:text-primary transition-colors" size={18} />
               <input
                 required
                 type="password"
@@ -138,24 +116,12 @@ export const RegisterPage = () => {
             disabled={loading}
             className="w-full bg-primary text-white py-4 rounded-2xl font-black flex items-center justify-center gap-2 hover:brightness-110 transition-all shadow-lg shadow-primary/20 active:scale-[0.98] disabled:opacity-50 mt-4"
           >
-            {loading ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : (
-              <>
-                Daftar Sekarang
-                <ArrowRight size={18} />
-              </>
-            )}
+            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <><ArrowRight size={18} />Daftar Sekarang</>}
           </button>
 
           <p className="text-center text-xs text-gray-500 font-medium pt-4">
             Sudah punya akun?{' '}
-            <Link
-              to="/login"
-              className="text-primary font-bold ml-1 hover:underline transition-all"
-            >
-              Masuk di sini
-            </Link>
+            <Link to="/login" className="text-primary font-bold ml-1 hover:underline">Masuk di sini</Link>
           </p>
         </form>
       </motion.div>

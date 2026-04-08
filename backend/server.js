@@ -191,5 +191,5 @@ app.get('/api/accounts', authMiddleware, async (req, res) => {
 
 // ================= START =================
 sequelize.sync().then(() => {
-  app.listen(5000, () => console.log('🚀 Server jalan di 5000'));
+  app.listen(PORT, () => console.log(`🚀 Server jalan di port ${PORT}`));
 });

@@ -1,10 +1,8 @@
 import React, { useState } from 'react';
-import axios from 'axios';
 import { Camera, Save, Loader2 } from 'lucide-react';
 import { api } from '../lib/api';
 
-// ✅ Penting: biar kirim cookie/session ke backend
-axios.defaults.withCredentials = true;
+// ✅ Hapus axios.defaults.withCredentials — udah dihandle di api.ts
 
 export const AddAccountPage = () => {
   const [formData, setFormData] = useState({
@@ -19,13 +17,10 @@ export const AddAccountPage = () => {
     setLoading(true);
 
     try {
-      await api.post(
-        '/accounts',
-        {
-          username: formData.username,
-          session: formData.session,
-        }
-      );
+      await api.post('/accounts', {
+        username: formData.username,
+        session: formData.session,
+      });
 
       alert('✅ Akun berhasil ditambahkan!');
       setFormData({ username: '', session: '' });
@@ -45,7 +40,7 @@ export const AddAccountPage = () => {
   return (
     <div className="max-w-2xl mx-auto p-6">
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8">
-        
+
         {/* HEADER */}
         <div className="flex items-center gap-4 mb-8">
           <div className="p-3 bg-pink-100 text-pink-600 rounded-2xl">
@@ -63,7 +58,7 @@ export const AddAccountPage = () => {
 
         {/* FORM */}
         <form onSubmit={handleSubmit} className="space-y-6">
-          
+
           {/* USERNAME */}
           <div>
             <label className="block text-sm font-semibold mb-2">

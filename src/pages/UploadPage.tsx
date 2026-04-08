@@ -4,8 +4,9 @@ import { cn } from '../lib/utils';
 import { Upload, X, Send, Loader2, Clock, Sparkles, Calendar as CalendarIcon, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link } from 'react-router-dom';
-import axios from 'axios';
 import { api } from '../lib/api';
+
+// ✅ Tidak ada import axios sama sekali
 
 interface UploadedFile {
   id: string;
@@ -35,7 +36,6 @@ export const UploadPage = () => {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch akun IG milik user yang sedang login
   useEffect(() => {
     const userId = localStorage.getItem('user_id');
     if (!userId) return;
@@ -43,7 +43,6 @@ export const UploadPage = () => {
     api.get(`/accounts?user_id=${userId}`)
       .then(res => {
         setAccounts(res.data);
-        // Auto-select akun pertama jika ada
         if (res.data.length > 0) setSelectedAccountId(res.data[0].id.toString());
       })
       .catch(err => console.error('Gagal fetch akun:', err))
@@ -69,9 +68,16 @@ export const UploadPage = () => {
     try {
       const formData = new FormData();
       formData.append('file', files[0].file);
+
       const n8nWebhookUrl = 'https://n8n-n8n.wrmm9a.easypanel.host/webhook/2b2a8b50-a3f3-4234-9ce0-caef8903f973';
-      const response = await axios.post(n8nWebhookUrl, formData);
-      const resultText = response.data?.caption || response.data?.text || "";
+
+      // ✅ Ganti axios.post → fetch biasa (karena URL external, bukan backend kita)
+      const response = await fetch(n8nWebhookUrl, {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await response.json();
+      const resultText = data?.caption || data?.text || "";
       if (resultText) setCaption(resultText);
     } catch {
       alert("Gagal menghubungi AI.");
@@ -97,7 +103,7 @@ export const UploadPage = () => {
       const formData = new FormData();
       formData.append('file', files[0].file);
       formData.append('user_id', currentUserId);
-      formData.append('account_id', selectedAccountId); // ✅ Pakai akun milik user
+      formData.append('account_id', selectedAccountId);
       formData.append('caption', caption);
       formData.append('author_name', currentUserName);
       formData.append('status', 'pending');
@@ -140,7 +146,6 @@ export const UploadPage = () => {
     });
   };
 
-  // ✅ Blokir halaman kalau belum punya akun IG
   if (!loadingAccounts && accounts.length === 0) {
     return (
       <motion.div
@@ -221,7 +226,6 @@ export const UploadPage = () => {
           <div className="lg:col-span-5 space-y-6">
             <div className="bg-white rounded-3xl p-6 shadow-sm border border-outline-variant/50 space-y-6">
 
-              {/* ✅ Pilih Akun Instagram */}
               <div>
                 <label className="text-sm font-bold text-on-surface block mb-2">Akun Instagram</label>
                 <select
