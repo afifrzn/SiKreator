@@ -4,7 +4,6 @@ import { RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { motion } from 'motion/react';
 import { api } from '../lib/api';
 
-// ✅ Ambil base URL dari env — hapus axios import yang ga dipakai
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 export const CalendarPage = () => {
@@ -18,6 +17,8 @@ export const CalendarPage = () => {
     try {
       const response = await api.get('/posts');
       const allData = Array.isArray(response.data) ? response.data : [];
+      
+      // Filter sesuai user yang sedang login
       const myPosts = allData.filter(post =>
         post.author === currentUser || post.user_name === currentUser
       );
@@ -30,6 +31,13 @@ export const CalendarPage = () => {
   };
 
   useEffect(() => { fetchPosts(); }, [currentUser]);
+
+  // Fungsi pembantu untuk menyamakan format tanggal (YYYY-MM-DD)
+  const normalizeDate = (dateInput: any) => {
+    if (!dateInput) return null;
+    const d = new Date(dateInput);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
 
   const days = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
 
@@ -66,7 +74,7 @@ export const CalendarPage = () => {
       animate={{ opacity: 1, y: 0 }}
       className="flex-1 h-screen overflow-y-auto no-scrollbar pb-24 lg:pb-8 bg-background"
     >
-      <header className="flex justify-between items-center w-full px-8 py-4 bg-background/70 backdrop-blur-xl sticky top-0 z-50 font-headline font-medium border-b border-outline-variant/5">
+      <header className="flex justify-between items-center w-full px-8 py-4 bg-background/70 backdrop-blur-xl sticky top-0 z-50 border-b border-outline-variant/5">
         <div className="flex items-center gap-4 flex-1">
           <h1 className="text-lg font-bold text-primary">Jadwal {currentUser}</h1>
         </div>
@@ -78,101 +86,91 @@ export const CalendarPage = () => {
             <RefreshCw size={18} className={isLoading ? "animate-spin" : ""} />
             <span>{isLoading ? "Sync..." : "Refresh Data"}</span>
           </button>
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-bold text-on-surface-variant">{currentUser}</span>
-            <div className="w-10 h-10 rounded-full overflow-hidden bg-primary-container border-2 border-white shadow-sm">
-              <img src={`https://ui-avatars.com/api/?name=${currentUser}&background=random`} alt="Profile" className="w-full h-full object-cover" />
-            </div>
-          </div>
         </div>
       </header>
 
       <div className="p-8 space-y-8 max-w-7xl mx-auto">
         <div className="flex justify-between items-end">
-          <div>
-            <h2 className="text-4xl font-extrabold font-headline tracking-tight text-on-surface flex items-center gap-4">
+          <div className="flex flex-col gap-2">
+            <h2 className="text-4xl font-extrabold tracking-tight text-on-surface flex items-center gap-4">
               {currentDate.toLocaleString('id-ID', { month: 'long', year: 'numeric' })}
               <div className="flex gap-2 ml-4">
-                <button onClick={prevMonth} className="p-2 bg-white border rounded-xl hover:bg-gray-50 transition-all active:scale-90"><ChevronLeft size={20} /></button>
-                <button onClick={nextMonth} className="p-2 bg-white border rounded-xl hover:bg-gray-50 transition-all active:scale-90"><ChevronRight size={20} /></button>
+                <button onClick={prevMonth} className="p-2 bg-white border rounded-xl hover:bg-gray-50 transition-all active:scale-95"><ChevronLeft size={20} /></button>
+                <button onClick={nextMonth} className="p-2 bg-white border rounded-xl hover:bg-gray-50 transition-all active:scale-95"><ChevronRight size={20} /></button>
               </div>
             </h2>
-            <p className="text-on-surface-variant mt-2">Menampilkan {scheduledPosts.length} konten terjadwal milikmu.</p>
+            <p className="text-sm text-gray-500 font-medium">Total {scheduledPosts.length} konten ditemukan di sistem.</p>
           </div>
         </div>
 
         <div className="grid grid-cols-12 gap-6">
-          <div className="col-span-12 lg:col-span-8 space-y-6">
+          <div className="col-span-12 lg:col-span-8">
             <div className="bg-white rounded-3xl p-6 shadow-sm border border-outline-variant/10">
               <div className="grid grid-cols-7 gap-3">
                 {days.map(day => (
                   <div key={day} className="text-center text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">{day}</div>
                 ))}
                 {calendarDays.map((item, idx) => {
-                  const dateString = item.date.toLocaleDateString('en-CA');
-                  const postInDay = scheduledPosts.find(p => {
-                    if (!p.scheduled_time) return false;
-                    return new Date(p.scheduled_time).toLocaleDateString('en-CA') === dateString;
-                  });
-                  const isToday = new Date().toLocaleDateString('en-CA') === dateString;
+                  const currentCalendarDate = normalizeDate(item.date);
+                  
+                  // Perbaikan filter: Mencari semua post yang tanggalnya sama dengan kotak kalender ini
+                  const postsInThisDay = scheduledPosts.filter(p => normalizeDate(p.scheduled_time) === currentCalendarDate);
+                  
+                  const isToday = normalizeDate(new Date()) === currentCalendarDate;
 
                   return (
-                    <div
-                      key={idx}
-                      className={cn(
-                        "min-h-[130px] rounded-2xl p-2 border transition-all flex flex-col",
-                        !item.isCurrentMonth && "opacity-20 grayscale",
-                        isToday ? "bg-primary/5 border-primary/20 ring-2 ring-primary/5" : "bg-gray-50/30 border-gray-100"
-                      )}
-                    >
-                      <div className={cn("text-xs font-bold mb-2", isToday ? "text-primary" : "text-gray-400")}>
+                    <div key={idx} className={cn(
+                      "min-h-[140px] rounded-2xl p-2 border transition-all flex flex-col gap-1", 
+                      !item.isCurrentMonth && "opacity-20 grayscale", 
+                      isToday ? "bg-primary/5 border-primary ring-1 ring-primary/20" : "bg-gray-50/30 border-gray-100"
+                    )}>
+                      <div className={cn("text-xs font-bold px-1", isToday ? "text-primary" : "text-gray-400")}>
                         {item.date.getDate()}
                       </div>
-                      {postInDay && (
-                        <div className="flex-1 bg-white rounded-xl p-1 shadow-sm border border-primary/10 overflow-hidden">
-                          <div className="relative aspect-video rounded-lg overflow-hidden mb-1 bg-gray-100">
-                            <img
-                              src={`${API_BASE_URL}${postInDay.Medium?.file_url}`} // ✅ Pakai API_BASE_URL
-                              className="w-full h-full object-cover"
-                              alt="Preview"
-                              onError={(e) => { e.currentTarget.src = "https://placehold.co/400x250?text=No+Image"; }}
-                            />
+                      
+                      <div className="flex flex-col gap-1 overflow-y-auto no-scrollbar">
+                        {postsInThisDay.map((post, pIdx) => (
+                          <div key={pIdx} className="bg-white rounded-xl p-1 shadow-sm border border-primary/10 group cursor-pointer hover:border-primary transition-colors">
+                            <div className="relative aspect-video rounded-lg overflow-hidden bg-gray-100">
+                              <img 
+                                src={`${API_BASE_URL}${post.Media?.file_url || post.Medium?.file_url}`} 
+                                className="w-full h-full object-cover"
+                                alt="Preview"
+                                onError={(e) => { e.currentTarget.src = "https://placehold.co/200x120?text=No+Image"; }}
+                              />
+                            </div>
+                            <p className="text-[8px] font-bold truncate mt-1 text-gray-700 px-1 uppercase tracking-tighter">
+                              {post.caption || 'Untitled'}
+                            </p>
                           </div>
-                          <p className="text-[9px] font-bold truncate px-1 text-gray-700">{postInDay.caption || 'Konten'}</p>
-                        </div>
-                      )}
+                        ))}
+                      </div>
                     </div>
                   );
                 })}
               </div>
             </div>
           </div>
-
+          
           <div className="col-span-12 lg:col-span-4">
             <div className="bg-gray-50 rounded-3xl p-6 border border-gray-100 h-full">
-              <h3 className="text-lg font-bold mb-6">Upcoming Post</h3>
+              <h3 className="text-lg font-bold mb-6">Upcoming List</h3>
               <div className="space-y-4">
                 {scheduledPosts.length > 0 ? (
-                  scheduledPosts.slice(0, 5).map(item => (
-                    <div key={item.id} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex gap-4">
-                      <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0 bg-gray-100">
-                        <img
-                          src={`${API_BASE_URL}${item.Medium?.file_url}`} // ✅ Pakai API_BASE_URL
-                          className="w-full h-full object-cover"
-                          onError={(e) => { e.currentTarget.src = "https://placehold.co/100x100?text=Error"; }}
-                        />
+                  scheduledPosts.slice(0, 6).map(item => (
+                    <div key={item.id} className="bg-white p-3 rounded-2xl shadow-sm border border-gray-100 flex gap-4 items-center">
+                      <div className="w-14 h-14 rounded-xl overflow-hidden shrink-0 bg-gray-50">
+                        <img src={`${API_BASE_URL}${item.Media?.file_url || item.Medium?.file_url}`} className="w-full h-full object-cover" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <h4 className="text-xs font-bold truncate">{item.caption || "No Caption"}</h4>
-                        <p className="text-[10px] text-gray-400 mt-1">
-                          {new Date(item.scheduled_time).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
+                        <h4 className="text-xs font-bold text-gray-800 truncate">{item.caption || "No Caption"}</h4>
+                        <p className="text-[10px] text-primary font-bold mt-1 uppercase tracking-wider">
+                          {new Date(item.scheduled_time).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                         </p>
                       </div>
                     </div>
                   ))
-                ) : (
-                  <p className="text-center text-sm text-gray-400 py-10">Belum ada jadwal konten untukmu.</p>
-                )}
+                ) : <p className="text-center text-sm text-gray-400 py-10 italic font-medium">Belum ada konten.</p>}
               </div>
             </div>
           </div>
