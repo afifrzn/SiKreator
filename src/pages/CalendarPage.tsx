@@ -16,13 +16,10 @@ export const CalendarPage = () => {
     setIsLoading(true);
     try {
       const response = await api.get('/posts');
+      // ✅ FIX 1: Tidak perlu filter manual di frontend,
+      // server sudah filter berdasarkan session user
       const allData = Array.isArray(response.data) ? response.data : [];
-      
-      // Filter sesuai user yang sedang login
-      const myPosts = allData.filter(post =>
-        post.author === currentUser || post.user_name === currentUser
-      );
-      setScheduledPosts(myPosts);
+      setScheduledPosts(allData);
     } catch (error) {
       console.error("Gagal ambil data:", error);
     } finally {
@@ -30,12 +27,13 @@ export const CalendarPage = () => {
     }
   };
 
-  useEffect(() => { fetchPosts(); }, [currentUser]);
+  useEffect(() => { fetchPosts(); }, []);
 
   // Fungsi pembantu untuk menyamakan format tanggal (YYYY-MM-DD)
   const normalizeDate = (dateInput: any) => {
     if (!dateInput) return null;
     const d = new Date(dateInput);
+    if (isNaN(d.getTime())) return null;
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   };
 
@@ -67,6 +65,13 @@ export const CalendarPage = () => {
   const calendarDays = getDaysInMonth();
   const nextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
   const prevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+
+  // ✅ FIX 2: Upcoming List hanya tampilkan post yang scheduled_time-nya di masa depan
+  const now = new Date();
+  const upcomingPosts = scheduledPosts
+    .filter(p => p.scheduled_time && new Date(p.scheduled_time) >= now)
+    .sort((a, b) => new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime())
+    .slice(0, 6);
 
   return (
     <motion.div
@@ -112,28 +117,29 @@ export const CalendarPage = () => {
                 ))}
                 {calendarDays.map((item, idx) => {
                   const currentCalendarDate = normalizeDate(item.date);
-                  
-                  // Perbaikan filter: Mencari semua post yang tanggalnya sama dengan kotak kalender ini
-                  const postsInThisDay = scheduledPosts.filter(p => normalizeDate(p.scheduled_time) === currentCalendarDate);
-                  
+
+                  const postsInThisDay = scheduledPosts.filter(p =>
+                    p.scheduled_time && normalizeDate(p.scheduled_time) === currentCalendarDate
+                  );
+
                   const isToday = normalizeDate(new Date()) === currentCalendarDate;
 
                   return (
                     <div key={idx} className={cn(
-                      "min-h-[140px] rounded-2xl p-2 border transition-all flex flex-col gap-1", 
-                      !item.isCurrentMonth && "opacity-20 grayscale", 
+                      "min-h-[140px] rounded-2xl p-2 border transition-all flex flex-col gap-1",
+                      !item.isCurrentMonth && "opacity-20 grayscale",
                       isToday ? "bg-primary/5 border-primary ring-1 ring-primary/20" : "bg-gray-50/30 border-gray-100"
                     )}>
                       <div className={cn("text-xs font-bold px-1", isToday ? "text-primary" : "text-gray-400")}>
                         {item.date.getDate()}
                       </div>
-                      
+
                       <div className="flex flex-col gap-1 overflow-y-auto no-scrollbar">
                         {postsInThisDay.map((post, pIdx) => (
                           <div key={pIdx} className="bg-white rounded-xl p-1 shadow-sm border border-primary/10 group cursor-pointer hover:border-primary transition-colors">
                             <div className="relative aspect-video rounded-lg overflow-hidden bg-gray-100">
-                              <img 
-                                src={`${API_BASE_URL}${post.Media?.file_url || post.Medium?.file_url}`} 
+                              <img
+                                src={`${API_BASE_URL}${post.Media?.file_url || post.Medium?.file_url}`}
                                 className="w-full h-full object-cover"
                                 alt="Preview"
                                 onError={(e) => { e.currentTarget.src = "https://placehold.co/200x120?text=No+Image"; }}
@@ -151,26 +157,39 @@ export const CalendarPage = () => {
               </div>
             </div>
           </div>
-          
+
           <div className="col-span-12 lg:col-span-4">
             <div className="bg-gray-50 rounded-3xl p-6 border border-gray-100 h-full">
               <h3 className="text-lg font-bold mb-6">Upcoming List</h3>
               <div className="space-y-4">
-                {scheduledPosts.length > 0 ? (
-                  scheduledPosts.slice(0, 6).map(item => (
+                {/* ✅ FIX 2: Pakai upcomingPosts, bukan scheduledPosts */}
+                {upcomingPosts.length > 0 ? (
+                  upcomingPosts.map(item => (
                     <div key={item.id} className="bg-white p-3 rounded-2xl shadow-sm border border-gray-100 flex gap-4 items-center">
                       <div className="w-14 h-14 rounded-xl overflow-hidden shrink-0 bg-gray-50">
-                        <img src={`${API_BASE_URL}${item.Media?.file_url || item.Medium?.file_url}`} className="w-full h-full object-cover" />
+                        <img
+                          src={`${API_BASE_URL}${item.Media?.file_url || item.Medium?.file_url}`}
+                          className="w-full h-full object-cover"
+                          alt="Thumbnail"
+                          onError={(e) => { e.currentTarget.src = "https://placehold.co/56x56?text=?"; }}
+                        />
                       </div>
                       <div className="min-w-0 flex-1">
                         <h4 className="text-xs font-bold text-gray-800 truncate">{item.caption || "No Caption"}</h4>
                         <p className="text-[10px] text-primary font-bold mt-1 uppercase tracking-wider">
-                          {new Date(item.scheduled_time).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                          {new Date(item.scheduled_time).toLocaleDateString('id-ID', {
+                            day: 'numeric',
+                            month: 'short',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
                         </p>
                       </div>
                     </div>
                   ))
-                ) : <p className="text-center text-sm text-gray-400 py-10 italic font-medium">Belum ada konten.</p>}
+                ) : (
+                  <p className="text-center text-sm text-gray-400 py-10 italic font-medium">Belum ada konten.</p>
+                )}
               </div>
             </div>
           </div>
