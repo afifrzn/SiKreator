@@ -69,7 +69,7 @@ export const UploadPage = () => {
       const formData = new FormData();
       formData.append('file', files[0].file);
 
-      const n8nWebhookUrl = 'https://n8n-n8n.wrmm9a.easypanel.host/webhook/2b2a8b50-a3f3-4234-9ce0-caef8903f973';
+      const n8nWebhookUrl = 'https://n8n-n8n.wrmm9a.easypanel.host/webhook/tanya-caption';
 
       // ✅ Ganti axios.post → fetch biasa (karena URL external, bukan backend kita)
       const response = await fetch(n8nWebhookUrl, {
@@ -309,4 +309,5 @@ export const UploadPage = () => {
       </div>
     </motion.div>
   );
+
 };
